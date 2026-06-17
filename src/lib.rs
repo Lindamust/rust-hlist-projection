@@ -1,10 +1,13 @@
-// Project<for all T in S> => &T iff T in H
+// Project<for all T in S> => [&T iff T in H]
 // 'iff' because frunk's Selector method doesn't exist if T isn't in H
 // therefore my Project method doesn't exist if there exists T in S s.t. T not in H
-// and by 'exists' i mean the compiler is able to prove coherence (existance is dual to compiler proof)
+// and by 'exists' I mean the compiler is able to prove coherence.
 //
 // in other words:
 // ProjectRef<'a, S, H> exists <=> S is a proper subset of H
+//
+// Like how a Sculptor is a Plucker on steroids,
+// Projector is like a Selector on steroids.
 
 use frunk::{
     hlist::{HCons, HNil, Selector},
@@ -14,15 +17,15 @@ use frunk::{
 // Projection will recurse over the target type list S,
 // searching for its corresponding type in H,
 // then use Selector to extract a ref
-pub trait ProjectRef<'a, S, Indicies> {
+pub trait Projector<'a, S, Indicies> {
     type Output;
     fn project_ref(&'a self) -> Self::Output;
 }
 
 // base case: target has been emptied
-impl<'a, Source, Idx> ProjectRef<'a, HNil, Idx> for Source
+impl<'a, Source, Idx> Projector<'a, HNil, Idx> for Source
 where
-    Source: Contains<HNil, Idx>,
+    Source: Contains<HNil, Idx>, // as it turns out, Contains is only needed for the base case for some reason.
 {
     type Output = HNil;
     fn project_ref(&'a self) -> Self::Output {
@@ -32,18 +35,17 @@ where
 
 // inductive case: call selector on head and recurse through targets
 impl<'a, THead, TTail, SHead, STail, IdxH, IdxT>
-    ProjectRef<'a, HCons<THead, TTail>, HCons<IdxH, IdxT>> for HCons<SHead, STail>
+    Projector<'a, HCons<THead, TTail>, HCons<IdxH, IdxT>> for HCons<SHead, STail>
 where
-    HCons<SHead, STail>:
-        Selector<THead, IdxH> + ProjectRef<'a, TTail, IdxT> + Contains<THead, IdxH>, // contains helps rust infer idx
+    HCons<SHead, STail>: Selector<THead, IdxH> + Projector<'a, TTail, IdxT>, // + Contains<THead, IdxH>,
     THead: 'a,
 {
-    type Output = HCons<&'a THead, <HCons<SHead, STail> as ProjectRef<'a, TTail, IdxT>>::Output>;
+    type Output = HCons<&'a THead, <HCons<SHead, STail> as Projector<'a, TTail, IdxT>>::Output>;
 
     fn project_ref(&'a self) -> Self::Output {
         HCons {
             head: self.get(),
-            tail: <HCons<SHead, STail> as ProjectRef<'a, TTail, IdxT>>::project_ref(&self),
+            tail: <HCons<SHead, STail> as Projector<'a, TTail, IdxT>>::project_ref(&self),
         }
     }
 }
@@ -51,17 +53,17 @@ where
 // helper trait: moves generics to the function for usage ergonomics
 // though, if this gets merged, can be replaced with a free fn implementation on HCons
 pub trait ProjectRefExt {
-    fn project_ref_ext<'a, S, Idx>(&'a self) -> <Self as ProjectRef<'a, S, Idx>>::Output
+    fn project_ref_ext<'a, S, Idx>(&'a self) -> <Self as Projector<'a, S, Idx>>::Output
     where
-        Self: ProjectRef<'a, S, Idx>;
+        Self: Projector<'a, S, Idx>;
 }
 
 impl<T> ProjectRefExt for T {
-    fn project_ref_ext<'a, S, Idx>(&'a self) -> <Self as ProjectRef<'a, S, Idx>>::Output
+    fn project_ref_ext<'a, S, Idx>(&'a self) -> <Self as Projector<'a, S, Idx>>::Output
     where
-        Self: ProjectRef<'a, S, Idx>,
+        Self: Projector<'a, S, Idx>,
     {
-        <Self as ProjectRef<'a, S, Idx>>::project_ref(&self)
+        <Self as Projector<'a, S, Idx>>::project_ref(&self)
     }
 }
 
@@ -71,6 +73,13 @@ impl<T> ProjectRefExt for T {
 // Why are there two indexes?
 // The generic is for recursive purposes and to prevent conflicting implementations.
 // The associated type stores this generic index as data which can be used by the compiler.
+//
+// (This was discovered later after I made everything work)
+// I was messing around and found out that everything still worked when I accidentally removed the Contains bound on the recursive step.
+// Then I removed it from the base case and everything broke.
+// So now I've come to realise that I know nothing about type inference.
+// Was Rust already perfectly capable of inferring the index of each type, except for the HNil type?
+// Did I waste 4 hours spread across 2 days of my life for nothing?
 pub trait Contains<T, Idx> {
     type Index;
 }
