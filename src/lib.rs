@@ -11,7 +11,10 @@ use frunk::{
     indices::{Here, There},
 };
 
-pub trait ProjectRef<'a, S, Idx> {
+// Projection will recurse over the target type list S,
+// searching for its corresponding type in H,
+// then use Selector to extract a ref
+pub trait ProjectRef<'a, S, Indicies> {
     type Output;
     fn project_ref(&'a self) -> Self::Output;
 }
@@ -64,6 +67,10 @@ impl<T> ProjectRefExt for T {
 
 // rust actually struggles to infer the pair-wise index hlist of our target types during compilation,
 // so this is a helper trait that says "this type T is in HCons at this Index"
+//
+// Why are there two indexes?
+// The generic is for recursive purposes and to prevent conflicting implementations.
+// The associated type stores this generic index as data which can be used by the compiler.
 pub trait Contains<T, Idx> {
     type Index;
 }
@@ -87,7 +94,7 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+mod projection_tests {
     use super::*;
     use frunk::{HList, hlist, hlist_pat};
 
