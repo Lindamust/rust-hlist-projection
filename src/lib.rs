@@ -6,10 +6,10 @@
 // in other words:
 // ProjectRef<'a, S, H> exists ⇔ S ⊆ H
 
-use frunk::hlist::{HCons, HNil, Selector};
-// HNil: zero-sized, end of a hlist
-// HCons<H, T>: hlist node (head, tail) -> ...
-// Selector<T, Idx>: pulls a reference to a type T iff T is in the HList in question (idx is a type witness)
+use frunk::{
+    hlist::{HCons, HNil, Selector},
+    indices::{Here, There},
+};
 
 pub trait ProjectRef<'a, S, Idx> {
     type Output;
@@ -17,7 +17,10 @@ pub trait ProjectRef<'a, S, Idx> {
 }
 
 // base case: target has been emptied
-impl<'a, Source, Idx> ProjectRef<'a, HNil, Idx> for Source {
+impl<'a, Source, Idx> ProjectRef<'a, HNil, Idx> for Source
+where
+    Source: Contains<HNil, Idx>,
+{
     type Output = HNil;
     fn project_ref(&'a self) -> Self::Output {
         HNil
@@ -28,7 +31,8 @@ impl<'a, Source, Idx> ProjectRef<'a, HNil, Idx> for Source {
 impl<'a, THead, TTail, SHead, STail, IdxH, IdxT>
     ProjectRef<'a, HCons<THead, TTail>, HCons<IdxH, IdxT>> for HCons<SHead, STail>
 where
-    HCons<SHead, STail>: Selector<THead, IdxH> + ProjectRef<'a, TTail, IdxT>, // <-- here we assume that ProjectRef holds for the tail
+    HCons<SHead, STail>:
+        Selector<THead, IdxH> + ProjectRef<'a, TTail, IdxT> + Contains<THead, IdxH>,
     THead: 'a,
 {
     type Output = HCons<&'a THead, <HCons<SHead, STail> as ProjectRef<'a, TTail, IdxT>>::Output>;
@@ -57,20 +61,41 @@ impl<T> ProjectRefExt for T {
     }
 }
 
+// rust actually struggles to infer the pair-wise index hlist of our target types,
+// so this is a helper trait that says "this type T is in HCons at this Index"
+pub trait Contains<T, Idx> {
+    type Index;
+}
+
+// Should a HNil contain itself?
+// Do all types contain themselves?
+// Its quite a philosophical question, but for the sake of pleasing the compiler I declare that is does.
+impl Contains<HNil, Here> for HNil {
+    type Index = Here;
+}
+
+impl<T, Tail> Contains<T, Here> for HCons<T, Tail> {
+    type Index = Here;
+}
+
+impl<T, Head, Tail, Idx> Contains<T, There<Idx>> for HCons<Head, Tail>
+where
+    Tail: Contains<T, Idx>,
+{
+    type Index = There<Tail::Index>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use frunk::{
-        HList, hlist, hlist_pat,
-        indices::{Here, There},
-    };
+    use frunk::{HList, hlist, hlist_pat};
 
     #[test]
     fn project_simple_type() {
         let h = hlist![1u32, "hello world", true];
         type S = HList![u32];
 
-        let projection = h.project_ref_ext::<S, HCons<Here, HNil>>();
+        let projection = h.project_ref_ext::<S, _>();
         let hlist_pat![value_ref] = projection;
 
         assert_eq!(*value_ref, 1u32);
@@ -81,7 +106,7 @@ mod tests {
         let h = hlist![1u32, "hello world", 42i64, true];
         type S = HList![u32, i64];
 
-        let projection = h.project_ref_ext::<S, HCons<Here, HCons<There<There<Here>>, HNil>>>();
+        let projection = h.project_ref_ext::<S, _>();
         let hlist_pat![usize_ref, isize_ref] = projection;
         assert_eq!(*usize_ref, 1u32);
         assert_eq!(*isize_ref, 42i64);
