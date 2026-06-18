@@ -3,7 +3,7 @@ HList projection is an operation that views a heterogeneous list through a type-
 
 “Projection” here means selecting and re-expressing specific components of a structure without moving or removing them, but instead borrowing them from the original.
 
-exposes a trait:
+### Exposes a trait
 ```rust
 pub trait Projector<Targets, Indicies> {
     type Projection<'a>
@@ -14,7 +14,7 @@ pub trait Projector<Targets, Indicies> {
     fn project(&self) -> Self::Projection<'_>;
 }
 ```
-and a helper trait:
+### ...And a helper trait
 ```rust
 // helper trait: moves generics to the function for usage ergonomics
 // though, if this gets merged, can be replaced with a free fn implementation on HCons
@@ -104,4 +104,4 @@ Currently only supports projections of shared references.
 
 Implementing projections of mutable references would require require making multiple mutable references to the Source HList due to the recursive nature of the implementation thus far. Therefore, if mutable projection were to be implemented it would be through unsafe raw pointer splitting since the indices structurally guarantee non-overlapping memory positions.
 
-Though, if possible, a workaround allowing for mutable projections could be to Sculpt the needed types, mutate them, then re-merge with the original remainder.
+Though, if possible, a workaround allowing for ~pseudo~ mutable projections could be to Sculpt the needed types, mutate them, then re-merge with the original remainder.
