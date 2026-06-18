@@ -16,7 +16,8 @@ pub trait Projector<Targets, Indicies> {
     where
         Self: 'a,
         Targets: 'a;
-    fn project_ref(&self) -> Self::Projection<'_>;
+
+    fn project(&self) -> Self::Projection<'_>;
 }
 
 // base case: target has been emptied
@@ -27,7 +28,7 @@ impl<Source> Projector<HNil, HNil> for Source {
         Source: 'a,
         HNil: 'a;
 
-    fn project_ref(&self) -> Self::Projection<'_> {
+    fn project(&self) -> Self::Projection<'_> {
         HNil
     }
 }
@@ -44,10 +45,10 @@ where
         HCons<SHead, STail>: 'a,
         HCons<THead, TTail>: 'a;
 
-    fn project_ref(&self) -> Self::Projection<'_> {
+    fn project(&self) -> Self::Projection<'_> {
         HCons {
             head: self.get(),
-            tail: <HCons<SHead, STail> as Projector<TTail, IdxT>>::project_ref(&self),
+            tail: <HCons<SHead, STail> as Projector<TTail, IdxT>>::project(&self),
         }
     }
 }
@@ -65,7 +66,7 @@ impl<T> ProjectRefExt for T {
     where
         Self: Projector<S, Idx>,
     {
-        <Self as Projector<S, Idx>>::project_ref(&self)
+        <Self as Projector<S, Idx>>::project(&self)
     }
 }
 
