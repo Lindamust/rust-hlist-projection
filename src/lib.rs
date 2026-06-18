@@ -9,43 +9,45 @@
 // Like how a Sculptor is a Plucker on steroids,
 // Projector is like a Selector on steroids.
 
-use frunk::{
-    hlist::{HCons, HNil, Selector},
-    indices::{Here, There},
-};
+use frunk::hlist::{HCons, HNil, Selector};
 
-// Projection will recurse over the target type list S,
-// searching for its corresponding type in H,
-// then use Selector to extract a ref
-pub trait Projector<'a, S, Indicies> {
-    type Output;
-    fn project_ref(&'a self) -> Self::Output;
+pub trait Projector<Targets, Indicies> {
+    type Projection<'a>
+    where
+        Self: 'a,
+        Targets: 'a;
+    fn project_ref(&self) -> Self::Projection<'_>;
 }
 
 // base case: target has been emptied
-impl<'a, Source, Idx> Projector<'a, HNil, Idx> for Source
-where
-    Source: Contains<HNil, Idx>, // as it turns out, Contains is only needed for the base case for some reason.
-{
-    type Output = HNil;
-    fn project_ref(&'a self) -> Self::Output {
+impl<Source> Projector<HNil, HNil> for Source {
+    type Projection<'a>
+        = HNil
+    where
+        Source: 'a,
+        HNil: 'a;
+
+    fn project_ref(&self) -> Self::Projection<'_> {
         HNil
     }
 }
 
-// inductive case: call selector on head and recurse through targets
-impl<'a, THead, TTail, SHead, STail, IdxH, IdxT>
-    Projector<'a, HCons<THead, TTail>, HCons<IdxH, IdxT>> for HCons<SHead, STail>
+// inductive case: call selector on target head and recurse through target tail
+impl<THead, TTail, SHead, STail, IdxH, IdxT> Projector<HCons<THead, TTail>, HCons<IdxH, IdxT>>
+    for HCons<SHead, STail>
 where
-    HCons<SHead, STail>: Selector<THead, IdxH> + Projector<'a, TTail, IdxT>, // + Contains<THead, IdxH>,
-    THead: 'a,
+    HCons<SHead, STail>: Selector<THead, IdxH> + Projector<TTail, IdxT>,
 {
-    type Output = HCons<&'a THead, <HCons<SHead, STail> as Projector<'a, TTail, IdxT>>::Output>;
+    type Projection<'a>
+        = HCons<&'a THead, <HCons<SHead, STail> as Projector<TTail, IdxT>>::Projection<'a>>
+    where
+        HCons<SHead, STail>: 'a,
+        HCons<THead, TTail>: 'a;
 
-    fn project_ref(&'a self) -> Self::Output {
+    fn project_ref(&self) -> Self::Projection<'_> {
         HCons {
             head: self.get(),
-            tail: <HCons<SHead, STail> as Projector<'a, TTail, IdxT>>::project_ref(&self),
+            tail: <HCons<SHead, STail> as Projector<TTail, IdxT>>::project_ref(&self),
         }
     }
 }
@@ -53,53 +55,18 @@ where
 // helper trait: moves generics to the function for usage ergonomics
 // though, if this gets merged, can be replaced with a free fn implementation on HCons
 pub trait ProjectRefExt {
-    fn project_ref_ext<'a, S, Idx>(&'a self) -> <Self as Projector<'a, S, Idx>>::Output
+    fn project_ref_ext<S, Idx>(&self) -> <Self as Projector<S, Idx>>::Projection<'_>
     where
-        Self: Projector<'a, S, Idx>;
+        Self: Projector<S, Idx>;
 }
 
 impl<T> ProjectRefExt for T {
-    fn project_ref_ext<'a, S, Idx>(&'a self) -> <Self as Projector<'a, S, Idx>>::Output
+    fn project_ref_ext<S, Idx>(&self) -> <Self as Projector<S, Idx>>::Projection<'_>
     where
-        Self: Projector<'a, S, Idx>,
+        Self: Projector<S, Idx>,
     {
-        <Self as Projector<'a, S, Idx>>::project_ref(&self)
+        <Self as Projector<S, Idx>>::project_ref(&self)
     }
-}
-
-// rust actually struggles to infer the pair-wise index hlist of our target types during compilation,
-// so this is a helper trait that says "this type T is in HCons at this Index"
-//
-// Why are there two indexes?
-// The generic is for recursive purposes and to prevent conflicting implementations.
-// The associated type stores this generic index as data which can be used by the compiler.
-//
-// (This was discovered later after I made everything work)
-// I was messing around and found out that everything still worked when I accidentally removed the Contains bound on the recursive step.
-// Then I removed it from the base case and everything broke.
-// So now I've come to realise that I know nothing about type inference.
-// Was Rust already perfectly capable of inferring the index of each type, except for the HNil type?
-// Did I waste 4 hours spread across 2 days of my life for nothing?
-pub trait Contains<T, Idx> {
-    type Index;
-}
-
-// Should a HNil contain itself?
-// Do all types contain themselves?
-// Its quite a philosophical question, but for the sake of pleasing the compiler I declare that is does.
-impl Contains<HNil, Here> for HNil {
-    type Index = Here;
-}
-
-impl<T, Tail> Contains<T, Here> for HCons<T, Tail> {
-    type Index = Here;
-}
-
-impl<T, Head, Tail, Idx> Contains<T, There<Idx>> for HCons<Head, Tail>
-where
-    Tail: Contains<T, Idx>,
-{
-    type Index = There<Tail::Index>;
 }
 
 #[cfg(test)]
@@ -143,13 +110,13 @@ mod projection_tests {
         assert_eq!(*usize_ref, 1u32);
     }
 
-    // This will intentionally not compile
+    // // This will intentionally not compile
     // #[test]
     // fn project_non_existant() {
     //     let h = hlist![1u32, "hello world", 42i64, true];
-    //     type S = HList![i64, f32]; <--- There is not 'f32' in our example HList
+    //     type S = HList![i64, f32]; // <--- There is not 'f32' in our example HList
 
-    //     let projection = h.project_ref_ext::<S, _>(); <--- therefore this method will not work
+    //     let projection = h.project_ref_ext::<S, _>(); // <--- therefore this method will not work
     //     let hlist_pat![isize_ref, float_ref] = projection;
 
     //     assert_eq!(*isize_ref, 42i64);
