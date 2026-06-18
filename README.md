@@ -110,6 +110,4 @@ Implementing projections of mutable references would require require making mult
 Though, if possible, a workaround allowing for *pseudo* mutable projections could be to Sculpt the needed types, mutate them, then re-merge with the original remainder.
 
 # Dependencies
-# Dependencies
-Frunk
 Frunk version 0.4.4
