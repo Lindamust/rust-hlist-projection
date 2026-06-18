@@ -1,7 +1,11 @@
 [package]
-name = "hlist-project-into"
+name = "rust-hlist-projection"
 version = "0.1.0"
 edition = "2024"
+authors = ["Lindamust <208328889+Lindamust@users.noreply.github.com>"]
+description = "allows for 'projecting' shared references to multiple specified types within a heterogeneous list"
+license = "MIT"
+repository = "https://github.com/Lindamust/rust-hlist-projection"
 
 [dependencies]
 frunk = "0.4.4"
