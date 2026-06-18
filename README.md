@@ -104,4 +104,4 @@ Currently only supports projections of shared references.
 
 Implementing projections of mutable references would require require making multiple mutable references to the Source HList due to the recursive nature of the implementation thus far. Therefore, if mutable projection were to be implemented it would be through unsafe raw pointer splitting since the indices structurally guarantee non-overlapping memory positions.
 
-Though, if possible, a workaround allowing for ~pseudo~ mutable projections could be to Sculpt the needed types, mutate them, then re-merge with the original remainder.
+Though, if possible, a workaround allowing for *pseudo* mutable projections could be to Sculpt the needed types, mutate them, then re-merge with the original remainder.
